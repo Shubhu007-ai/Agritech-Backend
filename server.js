@@ -10,6 +10,7 @@ const connectDB = require("./config/db");
 // Existing Models
 const Equipment = require("./models/Equipment");
 const Crop = require("./models/Crop");
+const session = require("express-session");
 
 // Connect DB
 connectDB();
@@ -26,6 +27,16 @@ app.use(
     credentials: true,
   }),
 );
+
+app.use(session({
+  secret: "agritech_secret",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: true,
+    sameSite: "none"
+  }
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
