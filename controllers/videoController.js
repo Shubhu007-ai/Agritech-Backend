@@ -2,10 +2,10 @@ const Video = require("../models/Video");
 const moderateContent = require("../utils/aiModeration");
 const axios = require("axios");
 
-
 exports.uploadVideo = async (req, res) => {
   try {
     console.log("REQ.USER:", req.user);
+
     const { title, description, category } = req.body;
 
     if (!req.file) {
@@ -14,16 +14,13 @@ exports.uploadVideo = async (req, res) => {
       });
     }
 
-    // ✅ Cloudinary URL (NOT local path)
+    // ✅ Cloudinary URL
     const videoUrl = req.file.path;
-
-    // ⚠️ If your moderation API NEEDS file stream:
-    // You CANNOT use fs anymore → use URL instead
 
     const moderationResponse = await axios.post(
       process.env.VIDEO_MODERATION_API_URL,
       {
-        videoUrl, // ✅ send URL instead of file
+        videoUrl,
         title,
         description,
         category
@@ -37,16 +34,16 @@ exports.uploadVideo = async (req, res) => {
     if (!result || result.toLowerCase() !== "approved") {
       return res.status(400).json({
         message:
-          "This video is not related to agriculture or farming. Please upload relevant content."
+          "This video is not related to agriculture or farming."
       });
     }
 
-    // ✅ Save Cloudinary URL in DB
+    // ✅ THIS await is now inside async function (fixed)
     const video = await Video.create({
       title,
       description,
       category,
-      videoUrl: videoUrl,
+      videoUrl,
       uploadedBy: req.user.id
     });
 
@@ -60,31 +57,6 @@ exports.uploadVideo = async (req, res) => {
     });
   }
 };
-
-    const video = await Video.create({
-      title,
-      description,
-      category,
-      videoUrl: `/uploads/${req.file.filename}`,
-      uploadedBy: req.user.id
-    });
-
-    res.json(video);
-
-  } catch (error) {
-    console.error("Moderation Error:", error.response?.data || error.message);
-
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-
-    res.status(500).json({
-      message: "Video moderation failed. Please try again."
-    });
-  }
-};
-
-
 
 
 exports.incrementViews = async (req, res) => {
