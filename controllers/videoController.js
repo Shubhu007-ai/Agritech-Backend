@@ -1,6 +1,7 @@
 const Video = require("../models/Video");
 const moderateContent = require("../utils/aiModeration");
 const axios = require("axios");
+const FormData = require("form-data");
 
 exports.uploadVideo = async (req, res) => {
   try {
@@ -17,15 +18,28 @@ exports.uploadVideo = async (req, res) => {
     // ✅ Cloudinary URL
     const videoUrl = req.file.path;
 
-    const moderationResponse = await axios.post(
-      process.env.VIDEO_MODERATION_API_URL,
-      {
-        videoUrl,
-        title,
-        description,
-        category
-      }
-    );
+
+
+// 🔥 Download video from Cloudinary
+const videoStream = await axios.get(videoUrl, {
+  responseType: "stream"
+});
+
+const formData = new FormData();
+formData.append("file", videoStream.data); // ✅ send as file
+formData.append("title", title);
+formData.append("description", description);
+formData.append("category", category);
+
+const moderationResponse = await axios.post(
+  process.env.VIDEO_MODERATION_API_URL,
+  formData,
+  {
+    headers: formData.getHeaders(),
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity
+  }
+);
 
     console.log("Moderation Response:", moderationResponse.data);
 
