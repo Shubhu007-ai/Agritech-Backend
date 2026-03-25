@@ -1,8 +1,6 @@
 const Video = require("../models/Video");
 const moderateContent = require("../utils/aiModeration");
 const axios = require("axios");
-const FormData = require("form-data");
-const fs = require("fs");
 
 
 exports.uploadVideo = async (req, res) => {
@@ -16,38 +14,52 @@ exports.uploadVideo = async (req, res) => {
       });
     }
 
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(req.file.path));
-    formData.append("title", title);
-    formData.append("description", description);
-    formData.append("category", category);
+    // ✅ Cloudinary URL (NOT local path)
+    const videoUrl = req.file.path;
+
+    // ⚠️ If your moderation API NEEDS file stream:
+    // You CANNOT use fs anymore → use URL instead
 
     const moderationResponse = await axios.post(
       process.env.VIDEO_MODERATION_API_URL,
-      formData,
       {
-        headers: {
-          ...formData.getHeaders()
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
+        videoUrl, // ✅ send URL instead of file
+        title,
+        description,
+        category
       }
     );
 
     console.log("Moderation Response:", moderationResponse.data);
 
-
     const result = moderationResponse.data?.status;
 
     if (!result || result.toLowerCase() !== "approved") {
-
-      fs.unlinkSync(req.file.path);
-
       return res.status(400).json({
         message:
           "This video is not related to agriculture or farming. Please upload relevant content."
       });
     }
+
+    // ✅ Save Cloudinary URL in DB
+    const video = await Video.create({
+      title,
+      description,
+      category,
+      videoUrl: videoUrl,
+      uploadedBy: req.user.id
+    });
+
+    res.status(200).json(video);
+
+  } catch (error) {
+    console.error("Moderation Error:", error.response?.data || error.message);
+
+    res.status(500).json({
+      message: "Video moderation failed. Please try again."
+    });
+  }
+};
 
     const video = await Video.create({
       title,
