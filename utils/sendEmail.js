@@ -10,13 +10,15 @@ const transporter = nodemailer.createTransport({
   secure: false,
 });
 
-const sendEmail = async (email, subject, content) => {
-  await transporter.sendMail({
+const sendEmail = (email, subject, content) => {
+  transporter.sendMail({
     from: '"AgriTech AI" <Agritechaiservices@gmail.com>',
     to: email,
     subject: subject,
     html: content
-  });
+  })
+  .then(() => console.log("Email sent"))
+  .catch((err) => console.error("Email failed:", err));
 };
 
 module.exports = sendEmail;

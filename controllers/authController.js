@@ -19,7 +19,7 @@ const register = async (req, res) => {
 
     if (phone.length !== 10) {
       return res.status(400).json({
-        message: "Phone number must be 10 digits"
+        message: "Phone number must be 10 digits",
       });
     }
 
@@ -27,7 +27,7 @@ const register = async (req, res) => {
 
     if (existingUser) {
       return res.status(400).json({
-        message: "User already registered"
+        message: "User already registered",
       });
     }
 
@@ -46,24 +46,28 @@ const register = async (req, res) => {
       otpExpire: Date.now() + 2 * 60 * 1000,
 
       resendCount: 0,
-      nextOtpRequest: Date.now() + 5 * 60 * 1000
+      nextOtpRequest: Date.now() + 5 * 60 * 1000,
     });
 
-    await sendEmail(
+    // ✅ SEND RESPONSE FIRST (no blocking)
+    res.json({
+      message: "User registered. OTP sent",
+      resendAfter: user.nextOtpRequest,
+    });
+
+    // ✅ Send email in background (NO await)
+    sendEmail(
       email,
       "Verify your email",
       `<h3>Your OTP is ${otp}</h3>
-       <p>This OTP expires in 2 minutes.</p>`
+   <p>This OTP expires in 2 minutes.</p>`,
     );
-
-    res.json({
-      message: "User registered. OTP sent",
-      resendAfter: user.nextOtpRequest
-    });
 
   } catch (err) {
     console.error("Register Error:", err);
-    res.status(500).json({ message: "Registration failed! Email already existed." });
+    res
+      .status(500)
+      .json({ message: "Registration failed! Email already existed." });
   }
 };
 
@@ -83,7 +87,7 @@ const resendOtp = async (req, res) => {
     if (Date.now() < user.nextOtpRequest) {
       return res.status(400).json({
         message: "Please wait before requesting OTP again",
-        resendAfter: user.nextOtpRequest
+        resendAfter: user.nextOtpRequest,
       });
     }
 
@@ -99,18 +103,18 @@ const resendOtp = async (req, res) => {
 
     await user.save();
 
-    await sendEmail(
+    res.json({
+      message: "OTP resent",
+      resendAfter: user.nextOtpRequest,
+    });
+    sendEmail(
       email,
       "New OTP",
       `<h3>Your new OTP is ${otp}</h3>
-       <p>This OTP expires in 2 minutes.</p>`
+       <p>This OTP expires in 2 minutes.</p>`,
     );
 
-    res.json({
-      message: "OTP resent",
-      resendAfter: user.nextOtpRequest
-    });
-
+    
   } catch (err) {
     console.error("Resend OTP Error:", err);
     res.status(500).json({ message: "Failed to resend OTP" });
@@ -132,7 +136,7 @@ const verifyOtp = async (req, res) => {
 
     if (user.otp !== otp || user.otpExpire < Date.now()) {
       return res.status(400).json({
-        message: "Invalid or expired OTP"
+        message: "Invalid or expired OTP",
       });
     }
 
@@ -143,7 +147,6 @@ const verifyOtp = async (req, res) => {
     await user.save();
 
     res.json({ message: "Email verified successfully" });
-
   } catch (err) {
     console.error("Verify OTP Error:", err);
     res.status(500).json({ message: "OTP verification failed" });
@@ -155,12 +158,11 @@ const verifyOtp = async (req, res) => {
 ============================================ */
 const login = async (req, res) => {
   try {
-
     const { identifier, password } = req.body;
 
     if (!identifier || !password) {
       return res.status(400).json({
-        message: "All fields are required"
+        message: "All fields are required",
       });
     }
 
@@ -168,7 +170,7 @@ const login = async (req, res) => {
     const isEmail = identifier.includes("@");
 
     const user = await User.findOne(
-      isEmail ? { email: identifier } : { phone: identifier }
+      isEmail ? { email: identifier } : { phone: identifier },
     );
 
     if (!user) {
@@ -177,7 +179,7 @@ const login = async (req, res) => {
 
     if (!user.isVerified) {
       return res.status(400).json({
-        message: "Please verify your email first"
+        message: "Please verify your email first",
       });
     }
 
@@ -185,18 +187,17 @@ const login = async (req, res) => {
 
     if (!isMatch) {
       return res.status(400).json({
-        message: "Incorrect password"
+        message: "Incorrect password",
       });
     }
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "90d" }
+      { expiresIn: "90d" },
     );
 
     res.json({ token, user });
-
   } catch (err) {
     console.error("Login Error:", err);
     res.status(500).json({ message: "Login failed" });
@@ -223,15 +224,16 @@ const forgotPassword = async (req, res) => {
 
     await user.save();
 
-    await sendEmail(
+     res.json({ message: "Reset OTP sent" });
+     
+     sendEmail(
       email,
       "Password Reset OTP",
       `<h2>Your OTP is ${otp}</h2>
-       <p>This OTP expires in 2 minutes</p>`
+       <p>This OTP expires in 2 minutes</p>`,
     );
 
-    res.json({ message: "Reset OTP sent" });
-
+   
   } catch (err) {
     console.error("Forgot Password Error:", err);
     res.status(500).json({ message: "Failed to send reset OTP" });
@@ -258,11 +260,10 @@ const setPassword = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "90d" }
+      { expiresIn: "90d" },
     );
 
     res.json({ token, user });
-
   } catch (err) {
     console.error("Set Password Error:", err);
     res.status(500).json({ message: "Failed to set password" });
@@ -286,12 +287,9 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "User not found" });
     }
 
-    if (
-      user.resetToken !== otp ||
-      user.resetExpire < Date.now()
-    ) {
+    if (user.resetToken !== otp || user.resetExpire < Date.now()) {
       return res.status(400).json({
-        message: "Invalid or expired OTP"
+        message: "Invalid or expired OTP",
       });
     }
 
@@ -304,7 +302,6 @@ const resetPassword = async (req, res) => {
     await user.save();
 
     res.json({ message: "Password updated successfully" });
-
   } catch (err) {
     console.error("Reset Password Error:", err);
     res.status(500).json({ message: "Password reset failed" });
@@ -320,7 +317,7 @@ const googleLogin = async (req, res) => {
 
     const ticket = await client.verifyIdToken({
       idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID
+      audience: process.env.GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
@@ -336,15 +333,15 @@ const googleLogin = async (req, res) => {
         name,
         email,
         phone: `google_${Date.now()}`,
-       password: await bcrypt.hash(Math.random().toString(), 10),
+        password: await bcrypt.hash(Math.random().toString(), 10),
         googleId: sub,
         isVerified: true,
-        hasPassword: false
+        hasPassword: false,
       });
 
       return res.json({
         needPasswordSetup: true,
-        email: user.email
+        email: user.email,
       });
     }
 
@@ -354,7 +351,7 @@ const googleLogin = async (req, res) => {
     if (!user.hasPassword) {
       return res.json({
         needPasswordSetup: true,
-        email: user.email
+        email: user.email,
       });
     }
 
@@ -364,14 +361,13 @@ const googleLogin = async (req, res) => {
     const jwtToken = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "90d" }
+      { expiresIn: "90d" },
     );
 
     res.json({
       token: jwtToken,
-      user
+      user,
     });
-
   } catch (err) {
     console.error("Google Login Error:", err);
     res.status(500).json({ message: "Google login failed" });
@@ -386,5 +382,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   googleLogin,
-  setPassword
+  setPassword,
 };
